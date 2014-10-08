@@ -9,6 +9,8 @@ enum Color {
 #[allow(dead_code)]
 static WORLD: [Color, ..5] = [Green, Red, Red, Green, Green];
 #[allow(dead_code)]
+static MEASUREMENTS: [Color, ..2] = [Red, Green];
+#[allow(dead_code)]
 static P_HIT: f32 = 0.6;
 #[allow(dead_code)]
 static P_MISS: f32 = 0.2;

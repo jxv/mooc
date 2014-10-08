@@ -7,6 +7,7 @@ enum Color {
 }
 
 static WORLD: [Color, ..5] = [Green, Red, Red, Green, Green];
+static MEASUREMENTS: [Color, ..2] = [Red, Green];
 static P_HIT: f32 = 0.6;
 static P_MISS: f32 = 0.2;
 
@@ -24,9 +25,8 @@ fn sense(p: &Vec<f32>, z: Color) -> Vec<f32> {
 
 fn main() {
     let mut p: Vec<f32> = vec![0.2, 0.2, 0.2, 0.2, 0.2];
-    let measurements: Vec<Color> = vec![Red, Green];
-    for &z in measurements.iter() {
-        p = sense(&p, z);
+    for i in range(0, MEASUREMENTS.len()) {
+        p = sense(&p, MEASUREMENTS[i]);
     }
     println!("{}", p);
 }
