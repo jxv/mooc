@@ -1,13 +1,13 @@
 #[allow(dead_code)]
-fn update<F: Float + FromPrimitive>(m1: F, v1: F, m2: F, v2: F) -> (F, F) {
+fn update<F: Float + FromPrimitive>(mean1: F, var1: F, mean2: F, var2: F) -> (F, F) {
     let one: F = FromPrimitive::from_f32(1.0).unwrap();
-    let new_mean: F = (one / (v1 + v2)) * (v2 * m1 + v1 * m2);
-    let new_var: F = one / ((one / v1) + (one / v2));
+    let new_mean: F = (one / (var1 + var2)) * (var2 * mean1 + var1 * mean2);
+    let new_var: F = one / ((one / var1) + (one / var2));
     (new_mean, new_var)
 }
 
-fn predict<F: Float + FromPrimitive>(m1: F, v1: F, m2: F, v2: F) -> (F, F) {
-    (m1 + m2, v1 + v2)
+fn predict<F: Float + FromPrimitive>(mean1: F, var1: F, mean2: F, var2: F) -> (F, F) {
+    (mean1 + mean2, var1 + var2)
 }
 
 fn main() {
