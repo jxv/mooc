@@ -29,7 +29,6 @@ impl Matrix {
         }
     }
 
-#[allow(dead_code)]
     fn identity(dim: uint) -> Matrix {
         assert!(dim > 0);
         Matrix {
@@ -156,20 +155,24 @@ impl Matrix {
 
 fn main() {
 
-   let initial_xy: Vec<f32> = vec![4.0, 12.0];
+    let initial_xy: Vec<f32> = vec![4.0, 12.0];
 
-    let x = Matrix::new(vec![vec![initial_xy[0]], vec![initial_xy[1]], vec![0.0], vec![0.0]]); // initial state
+    // initial state
+    let x = Matrix::new(vec![vec![initial_xy[0]],
+                             vec![initial_xy[1]],
+                             vec![0.0],
+                             vec![0.0]]);
+
+    // initial uncertainty
     let p = Matrix::new(vec![vec![0.0, 0.0, 0.0, 0.0],
                              vec![0.0, 0.0, 0.0, 0.0],
                              vec![0.0, 0.0, 1000.0, 0.0],
-                             vec![0.0, 0.0, 0.0, 1000.0]]); // intial uncertainty
+                             vec![0.0, 0.0, 0.0, 1000.0]]); 
     kalman_filter(x, p);
 }
 
 
 fn kalman_filter(x: Matrix, p: Matrix) {
-
-
     let mut x = x.clone(); // pos and vel
     let mut p = p.clone(); // initial uncertainty
     
@@ -180,13 +183,31 @@ fn kalman_filter(x: Matrix, p: Matrix) {
                                            vec![9.0, 2.0],
                                            vec![10.0, 0.0]];
 
+    // time step
     let dt: f32 = 0.1; 
 
-    let u = Matrix::new(vec![vec![0.0], vec![0.0], vec![0.0], vec![0.0]]); // extern motion (none)
-    let f = Matrix::new(vec![vec![1.0, 0.0, dt, 0.0], vec![0.0, 1.0, 0.0, dt], vec![0.0, 0.0, 1.0, 0.0], vec![0.0, 0.0, 0.0, 1.0]]);
-    let h = Matrix::new(vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]]);
-    let r = Matrix::new(vec![vec![0.1, 0.0], vec![0.0, 0.1]]);
-    let i = Matrix::new(vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0], vec![0.0, 0.0, 1.0, 0.0], vec![0.0, 0.0, 0.0, 1.0]]);
+    // extern motion
+    let u = Matrix::new(vec![vec![0.0],
+                             vec![0.0],
+                             vec![0.0],
+                             vec![0.0]]);
+
+    // next state fn
+    let f = Matrix::new(vec![vec![1.0, 0.0, dt, 0.0],
+                             vec![0.0, 1.0, 0.0, dt],
+                             vec![0.0, 0.0, 1.0, 0.0],
+                             vec![0.0, 0.0, 0.0, 1.0]]);
+
+    // measurement fn
+    let h = Matrix::new(vec![vec![1.0, 0.0, 0.0, 0.0],
+                             vec![0.0, 1.0, 0.0, 0.0]]);
+
+    // measurement uncertainty
+    let r = Matrix::new(vec![vec![0.1, 0.0],
+                             vec![0.0, 0.1]]);
+
+    // identity matrix
+    let i = Matrix::identity(4);
 
     for n in range(0, measurements.len()) {
         // prediction
@@ -195,7 +216,7 @@ fn kalman_filter(x: Matrix, p: Matrix) {
 
         // measurement update
         let z = Matrix::new(vec![measurements[n].clone()]);  // use z for higher dimensional spaces
-        let y = z.transpose().sub(h.mul(x.clone())); // '...'
+        let y = z.transpose().sub(h.mul(x.clone())); 
         let s = h.mul(p.clone()).mul(h.transpose()).add(r.clone());
         let k = p.mul(h.transpose()).mul(s.inverse());
         x = x.add(k.mul(y.clone()));
