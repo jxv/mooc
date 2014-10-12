@@ -12,6 +12,10 @@ impl Matrix {
     fn new(value: Vec<Vec<f32>>) -> Matrix {
         assert!(value.len() > 0);
         assert!(value[0].len() > 0);
+        for i in range(1, value.len()) {
+            assert!(value[0].len() == value[i].len());
+        }
+
         Matrix {
             value: value.clone(),
             dimx: value.len(),
