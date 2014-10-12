@@ -42,7 +42,7 @@ impl Matrix {
         }
     }
 
-    fn add(&self, other: Matrix) -> Matrix {
+    fn add(&self, other: &Matrix) -> Matrix {
         assert!(self.dimx == other.dimx);
         assert!(self.dimy == other.dimy);
         let mut res = Matrix::zero(self.dimx, self.dimy);
@@ -54,7 +54,7 @@ impl Matrix {
         res
     }
     
-    fn sub(&self, other: Matrix) -> Matrix {
+    fn sub(&self, other: &Matrix) -> Matrix {
         assert!(self.dimx == other.dimx);
         assert!(self.dimy == other.dimy);
         let mut res = Matrix::zero(self.dimx, self.dimy);
@@ -66,7 +66,7 @@ impl Matrix {
         res
     }
 
-    fn mul(&self, other: Matrix) -> Matrix {
+    fn mul(&self, other: &Matrix) -> Matrix {
         assert!(self.dimy == other.dimx);
         let mut res = Matrix::zero(self.dimx, other.dimy);
         for i in range(0, self.dimx) {
@@ -151,9 +151,50 @@ impl Matrix {
 }
 
 
+struct Cxt {
+    u: Matrix, // extern motion
+    f: Matrix, // next state fn
+    h: Matrix, // measurement fn
+    r: Matrix, // measurement uncertainty
+    i: Matrix, // identity matrix
+}
+
+
+impl Cxt {
+    fn new(dt: f32) -> Cxt {
+        Cxt {
+            u: Matrix::new(vec![vec![0.0],
+                                vec![0.0],
+                                vec![0.0],
+                                vec![0.0]]),
+
+            f: Matrix::new(vec![vec![1.0, 0.0, dt, 0.0],
+                                vec![0.0, 1.0, 0.0, dt],
+                                vec![0.0, 0.0, 1.0, 0.0],
+                                vec![0.0, 0.0, 0.0, 1.0]]),
+
+            h: Matrix::new(vec![vec![1.0, 0.0, 0.0, 0.0],
+                                vec![0.0, 1.0, 0.0, 0.0]]),
+
+            r: Matrix::new(vec![vec![0.1, 0.0],
+                                vec![0.0, 0.1]]),
+
+            i: Matrix::identity(4),
+        }
+    }
+}
 
 
 fn main() {
+    let cxt = Cxt::new(0.1);
+    
+    let measurements: Vec<Vec<f32>> = vec![vec![5.0, 10.0],
+                                           vec![6.0, 8.0],
+                                           vec![7.0, 6.0],
+                                           vec![8.0, 4.0],
+                                           vec![9.0, 2.0],
+                                           vec![10.0, 0.0]];
+
 
     let initial_xy: Vec<f32> = vec![4.0, 12.0];
 
@@ -168,59 +209,30 @@ fn main() {
                              vec![0.0, 0.0, 0.0, 0.0],
                              vec![0.0, 0.0, 1000.0, 0.0],
                              vec![0.0, 0.0, 0.0, 1000.0]]); 
-    kalman_filter(x, p);
+
+    kalman_filter(&cxt, &measurements, &x, &p);
 }
 
 
-fn kalman_filter(x: Matrix, p: Matrix) {
+fn kalman_filter(cxt: &Cxt, measurements: &Vec<Vec<f32>>, x: &Matrix, p: &Matrix) {
     let mut x = x.clone(); // pos and vel
     let mut p = p.clone(); // initial uncertainty
-    
-    let measurements: Vec<Vec<f32>> = vec![vec![5.0, 10.0],
-                                           vec![6.0, 8.0],
-                                           vec![7.0, 6.0],
-                                           vec![8.0, 4.0],
-                                           vec![9.0, 2.0],
-                                           vec![10.0, 0.0]];
 
-    // time step
-    let dt: f32 = 0.1; 
-
-    // extern motion
-    let u = Matrix::new(vec![vec![0.0],
-                             vec![0.0],
-                             vec![0.0],
-                             vec![0.0]]);
-
-    // next state fn
-    let f = Matrix::new(vec![vec![1.0, 0.0, dt, 0.0],
-                             vec![0.0, 1.0, 0.0, dt],
-                             vec![0.0, 0.0, 1.0, 0.0],
-                             vec![0.0, 0.0, 0.0, 1.0]]);
-
-    // measurement fn
-    let h = Matrix::new(vec![vec![1.0, 0.0, 0.0, 0.0],
-                             vec![0.0, 1.0, 0.0, 0.0]]);
-
-    // measurement uncertainty
-    let r = Matrix::new(vec![vec![0.1, 0.0],
-                             vec![0.0, 0.1]]);
-
-    // identity matrix
-    let i = Matrix::identity(4);
+    let h_t = cxt.h.transpose();
 
     for n in range(0, measurements.len()) {
         // prediction
-        x = f.mul(x.clone()).add(u.clone());
-        p = f.mul(p.clone()).mul(f.transpose());
+        x = cxt.f.mul(&x).add(&cxt.u);
+        p = cxt.f.mul(&p).mul(&cxt.f.transpose());
 
         // measurement update
         let z = Matrix::new(vec![measurements[n].clone()]);  // use z for higher dimensional spaces
-        let y = z.transpose().sub(h.mul(x.clone())); 
-        let s = h.mul(p.clone()).mul(h.transpose()).add(r.clone());
-        let k = p.mul(h.transpose()).mul(s.inverse());
-        x = x.add(k.mul(y.clone()));
-        p = i.sub(k.mul(h.clone())).mul(p.clone());
+
+        let y = z.transpose().sub(&cxt.h.mul(&x));   // y = trans(z) - (h * x)
+        let s = cxt.h.mul(&p).mul(&h_t).add(&cxt.r); // s = h * p * trans(h) + r
+        let k = p.mul(&h_t).mul(&s.inverse());       // k = p * trans(h) * inv(s)
+        x = x.add(&k.mul(&y));                       // x := x + (k * y)
+        p = cxt.i.sub(&k.mul(&cxt.h)).mul(&p);       // p := (i - (k * h)) * p
     }
 
     // print
