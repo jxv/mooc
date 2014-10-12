@@ -1,8 +1,8 @@
-fn gaussian<F: Float + FromPrimitive>(mean: F, covar2: F, x: F) -> F {
-    let two: F = FromPrimitive::from_f32(2.0).unwrap();
-    let a: F = two * Float::pi() * covar2;
-    let b: F = (x - mean).powi(2) / (-two * covar2);
-    b.exp() / a.sqrt()
+use std::num::{Float};
+
+fn gaussian<F: Float>(mean: F, covar2: F, x: F) -> F {
+    let two_pi: F = Float::two_pi();
+    ((x - mean).powi(2) / -(covar2 + covar2)).exp() / (two_pi * covar2).sqrt()
 }
 
 fn main() {
