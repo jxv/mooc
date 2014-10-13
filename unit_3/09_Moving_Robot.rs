@@ -96,6 +96,19 @@ impl Robot {
     }
 }
 
+#[allow(dead_code)]
+fn eval(r: &Robot, ps: &Vec<Robot>) -> f32 {
+    let mut sum: f32 = 0.0;
+    for p in ps.iter() {
+        assert!(r.world_size == p.world_size);
+        let dx = (p.x - r.x + (r.world_size / 2.0)) % r.world_size - (r.world_size / 2.0);
+        let dy = (p.y - r.y + (r.world_size / 2.0)) % r.world_size - (r.world_size / 2.0);
+        let err = (dx * dx + dy * dy).sqrt();
+        sum += err;
+    }
+    sum / (ps.len() as f32)
+}
+
 fn main() {
     let landmarks: Vec<(f32,f32)> = vec![(20.0, 20.0),
                                          (80.0, 80.0),
