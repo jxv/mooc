@@ -60,7 +60,6 @@ impl Robot {
         self.sense_noise = new_s_noise;
     }
 
-#[allow(dead_code)]
     fn sense(&self, landmarks: &Vec<(f32,f32)>) -> Vec<f32> {
         let mut z: Vec<f32> = Vec::with_capacity(landmarks.len());
         for &(x,y) in landmarks.iter() {
@@ -124,8 +123,6 @@ fn main() {
 
     let world_size: f32 = 100.0;
     let mut myrobot = Robot::new(world_size);
-    myrobot = myrobot.travel(0.1, 5.0);
-    let z = myrobot.sense(&landmarks);
     
     let n: uint = 1000;
     let mut ps = Vec::from_fn(n, |_| {
@@ -134,39 +131,44 @@ fn main() {
         x
     });
 
-    // travel
-    for i in range(0, n) {
-        *ps.get_mut(i) = ps[i].travel(0.1, 5.0);
-    }
+    for _ in range(0u,2u) {
+        myrobot = myrobot.travel(0.1, 5.0);
+        let z = myrobot.sense(&landmarks);
 
-    // weigh
-    let mut ws: Vec<f32> = Vec::with_capacity(n);
-    for i in range(0, ps.len()) {
-        ws.push(ps[i].measurement_prob(&landmarks, &z));
-    }
-
-    // normalize
-    let s: f32 = ws.iter().map(|&x| x).sum();
-
-    for i in range(0, n) {
-        *ws.get_mut(i) = ws[i] / s;
-    }
-
-    // resample
-    let mut p3: Vec<Robot> = Vec::with_capacity(n);
-    let mut index = 0;
-    let mut beta = random::<f32>() * 2.0;
-    let mut mw = 0.00000001;
-    for &w in ws.iter() { if w > mw { mw = w; } } 
-    for _ in range(0, n) {
-        beta += random::<f32>() * 2.0 * mw;
-        while beta > ws[index] {
-            beta -= ws[index];
-            index = (index + n + 1) % n;
+        // travel
+        for i in range(0, n) {
+            *ps.get_mut(i) = ps[i].travel(0.1, 5.0);
         }
-        p3.push(ps[index].clone());
+
+        // weigh
+        let mut ws: Vec<f32> = Vec::with_capacity(n);
+        for i in range(0, ps.len()) {
+            ws.push(ps[i].measurement_prob(&landmarks, &z));
+        }
+
+        // normalize
+        let s: f32 = ws.iter().map(|&x| x).sum();
+
+        for i in range(0, n) {
+            *ws.get_mut(i) = ws[i] / s;
+        }
+
+        // resample
+        let mut p3: Vec<Robot> = Vec::with_capacity(n);
+        let mut index = 0;
+        let mut beta = random::<f32>() * 2.0;
+        let mut mw = 0.00000001;
+        for &w in ws.iter() { if w > mw { mw = w; } } 
+        for _ in range(0, n) {
+            beta += random::<f32>() * 2.0 * mw;
+            while beta > ws[index] {
+                beta -= ws[index];
+                index = (index + n + 1) % n;
+            }
+            p3.push(ps[index].clone());
+        }
+        ps = p3;
     }
-    ps = p3;
 
     for p in ps.iter() {
         println!("{}", p);
