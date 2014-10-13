@@ -80,8 +80,8 @@ impl Robot {
         let dist = forward + gauss(0.0, self.forward_noise);
         let mut x = self.x + orientation.cos() * dist;
         let mut y = self.y + orientation.sin() * dist;
-        x = x % self.world_size;
-        y = y % self.world_size;
+        x = modulo(x, self.world_size);
+        y = modulo(y, self.world_size);
 
         let mut res = Robot::new(self.world_size);
         res.set(x, y, orientation);
@@ -107,8 +107,8 @@ fn eval(r: &Robot, ps: &Vec<Robot>) -> f32 {
     let mut sum: f32 = 0.0;
     for p in ps.iter() {
         assert!(r.world_size == p.world_size);
-        let dx = (p.x - r.x + (r.world_size / 2.0)) % r.world_size - (r.world_size / 2.0);
-        let dy = (p.y - r.y + (r.world_size / 2.0)) % r.world_size - (r.world_size / 2.0);
+        let dx = modulo((p.x - r.x + (r.world_size / 2.0)), r.world_size) - (r.world_size / 2.0);
+        let dy = modulo((p.y - r.y + (r.world_size / 2.0)), r.world_size) - (r.world_size / 2.0);
         let err = (dx * dx + dy * dy).sqrt();
         sum += err;
     }
