@@ -124,6 +124,7 @@ fn main() {
 
     let mut myrobot = Robot::new(world_size);
 
+    myrobot.set_noise(5.0, 0.1, 5.0); 
     let frac_pi_2: f32 = Float::frac_pi_2();
     myrobot.set(30.0, 50.0, frac_pi_2);
     
