@@ -60,11 +60,12 @@ impl Robot {
     fn sense(&self, landmarks: &Vec<(f32,f32)>) -> Vec<f32> {
         let mut z: Vec<f32> = Vec::with_capacity(landmarks.len());
         for &(y,x) in landmarks.iter() {
-            // sensed dist
-            let mut dist = modulo((y - self.y).atan2(x - self.x) - self.orientation, Float::two_pi());
+            // sensed bearing
+            let mut bearing = modulo((y - self.y).atan2(x - self.x) - self.orientation, Float::two_pi());
             // add error
-            dist += gauss(0.0, self.sense_noise);
-            z.push(dist);
+            bearing += gauss(0.0, self.sense_noise);
+            bearing = modulo(bearing, Float::two_pi());
+            z.push(bearing);
         }
         z
     }
