@@ -1,4 +1,3 @@
-// use std::iter::AdditiveIterator;
 use std::rand::{random, task_rng};
 use std::rand::distributions::{Normal, IndependentSample};
 use std::num::{Float, FloatMath};
