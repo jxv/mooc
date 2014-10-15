@@ -3,7 +3,6 @@ extern crate core;
 use std::rand::{random, task_rng};
 use std::rand::distributions::{Normal, IndependentSample};
 use std::num::{Float, FloatMath, FromPrimitive, abs};
-use core::f32::consts::{PI};
 
 // static MAX_STEERING_ANGLE: f32 = core::f32::const::FRAC_PI_4;
 static LENGTH: f32 = 20.0;
@@ -143,7 +142,7 @@ fn main() {
 
 
 fn test_case_1() {
-    let motions: Vec<(f32,f32)> = Vec::from_elem(8, (PI * 2.0 / 10.0, 20.0));
+    let motions: Vec<(f32,f32)> = Vec::from_elem(8, (2.0_f32 * Float::pi() / 10.0_f32, 20.0));
     let measurements: Vec<Vec<f32>> = vec![
         vec![4.746936, 3.859782, 3.045217, 2.045506],
         vec![3.510067, 2.916300, 2.146394, 1.598332],
@@ -161,7 +160,7 @@ fn test_case_1() {
 
 fn test_case_2() {
     let number_of_iterations = 6;
-    let motions: Vec<(f32,f32)> = Vec::from_elem(number_of_iterations, (2.0 * PI / 20.0, 12.0));
+    let motions: Vec<(f32,f32)> = Vec::from_elem(number_of_iterations, (2.0_f32 * Float::pi() / 20.0_32, 12.0));
     let (final_robot, measurements) = generate_ground_truth(&motions);
     let estimated_position = particle_filter(&motions, &measurements, 500);
 
