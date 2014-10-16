@@ -9,13 +9,13 @@ enum Space {
 #[deriving(Show,PartialEq,Clone)]
 enum Dir {
     Up,
-    Down,
     Left,
+    Down,
     Right,
 }
 
 fn from_dir(dir: Dir) -> uint {
-    match dir { Up => 0, Down => 1, Left => 2, Right => 3 }
+    match dir { Up => 0, Left => 1, Down => 2, Right => 3 }
 }
 
 #[deriving(Show,PartialEq,Clone)]
@@ -40,14 +40,14 @@ static GRID: [[Space, ..6], ..5] = [
 
 static GOAL: (uint, uint) = (2, 0);
 static INIT: (uint, uint, Dir) = (4, 3, Up);
-static DIRS: [Dir, ..4] = [Up, Down, Left, Right];
+static DIRS: [Dir, ..4] = [Up, Left, Down, Right];
 static ACTIONS: [Action, ..3] = [LeftTurn, NoTurn, RightTurn];
 
 fn forward((y,x): (uint, uint), dir: Dir) -> Option<(uint, uint)> {
     let (y2, x2) = match dir {
         Up    => (y - 1, x),
-        Down  => (y + 1, x),
         Left  => (y, x - 1),
+        Down  => (y + 1, x),
         Right => (y, x + 1),
     };
     if y2 < GRID.len() && x2 < GRID[0].len() { Some((y2,x2)) } else { None }
@@ -70,6 +70,14 @@ fn apply_action_on_dir(dir: Dir, action: Action) -> Dir {
     }
 }
 
+fn propagate_dir_from_action(action: Action, dir: Dir) -> Dir {
+    match action {
+        LeftTurn  => match dir { Up => Right, Left => Up,   Down => Left,  Right => Down  },
+        NoTurn    => match dir { Up => Up,    Left => Left, Down => Down,  Right => Right },
+        RightTurn => match dir { Up => Left,  Left => Down, Down => Right, Right => Up    },
+    }
+}
+
 fn main() {
     for row in optimum_policy_2d().iter() {
         println!("{}", row);
@@ -77,7 +85,7 @@ fn main() {
 }
 
 fn optimum_policy_2d() -> Vec<Vec<char>> {
-    let mut value = Vec::from_elem(4, Vec::from_elem(GRID.len(), Vec::from_elem(GRID[0].len(), 99u)));
+    let mut value = Vec::from_elem(4, Vec::from_elem(GRID.len(), Vec::from_elem(GRID[0].len(), 999u)));
     let mut policy = Vec::from_elem(4, Vec::from_elem(GRID.len(), Vec::from_elem(GRID[0].len(), ' ')));
     let mut policy_2d = Vec::from_elem(GRID.len(), Vec::from_elem(GRID[0].len(), ' '));
 
@@ -89,25 +97,25 @@ fn optimum_policy_2d() -> Vec<Vec<char>> {
         change = false;
         for y in range(0, GRID.len()) {
             for x in range(0, GRID[0].len()) {
-                for &dir in DIRS.iter() {
+                for &d in DIRS.iter() {
                     if GOAL.0 == y && GOAL.1 == x {
-                        if value[from_dir(dir)][y][x] > 0 {
+                        if value[from_dir(d)][y][x] > 0 {
                             change = true;
-                            *value.get_mut(from_dir(dir)).get_mut(y).get_mut(x) = 0;
-                            *policy.get_mut(from_dir(dir)).get_mut(y).get_mut(x) = '*';
-                        } else if GRID[y][x] == O {
-                            for &action in ACTIONS.iter() {
-                                let d2 = apply_action_on_dir(dir, action);
-                                let (y2,x2) = match forward((y,x), dir) { None => continue, Some(yx) => yx };
-                                let v2 = match GRID[y2][x2] {
-                                    X => continue,
-                                    O => value[from_dir(d2)][y2][x2] + cost(action)
-                                };
-                                if v2 < value[from_dir(d2)][y][x] {
-                                    *value.get_mut(from_dir(d2)).get_mut(y).get_mut(x) = v2;
-                                    *policy.get_mut(from_dir(d2)).get_mut(y).get_mut(x) = action_name(action);
-                                    change = true;
-                                }
+                            *value.get_mut(from_dir(d)).get_mut(y).get_mut(x) = 0;
+                            *policy.get_mut(from_dir(d)).get_mut(y).get_mut(x) = '*';
+                        }
+                    } else if GRID[y][x] == O {
+                        for &a in ACTIONS.iter() {
+                            let d2 = apply_action_on_dir(d, a);
+                            let (y2,x2) = match forward((y,x), d2) { None => continue, Some(yx) => yx };
+                            let v2 = match GRID[y2][x2] {
+                                X => continue,
+                                O => value[from_dir(d2)][y2][x2] + cost(a)
+                            };
+                            if v2 < value[from_dir(d)][y][x] {
+                                *value.get_mut(from_dir(d)).get_mut(y).get_mut(x) = v2;
+                                *policy.get_mut(from_dir(d)).get_mut(y).get_mut(x) = action_name(a);
+                                change = true;
                             }
                         }
                     }
@@ -118,26 +126,28 @@ fn optimum_policy_2d() -> Vec<Vec<char>> {
 
     //
 
-    let mut x = INIT.0;
-    let mut y = INIT.1;
-    let mut dir = INIT.2;
+    let mut y = INIT.0;
+    let mut x = INIT.1;
+    let mut d = INIT.2;
 
-    *policy_2d.get_mut(y).get_mut(x) = policy[from_dir(dir)][y][x];
-    while policy[from_dir(dir)][y][x] != '*' {
-        let d2 = match policy[from_dir(dir)][y][x] {
-            '#' => dir,
-            'R' => apply_action_on_dir(dir, RightTurn),
-            'L' => apply_action_on_dir(dir, LeftTurn),
+
+    *policy_2d.get_mut(y).get_mut(x) = policy[from_dir(d)][y][x];
+    while policy[from_dir(d)][y][x] != '*' {
+        let d2 = match policy[from_dir(d)][y][x] {
+            '#' => d,
+            'R' => apply_action_on_dir(d, RightTurn),
+            'L' => apply_action_on_dir(d, LeftTurn),
             _ => break,
         };
-        let (y2, x2) = match forward((y,x), dir) { None => break, Some(yx) => yx };
+        let (y2, x2) = match forward((y,x), d2) { None => break, Some(yx) => yx };
 
         y = y2;
         x = x2;
-        dir = d2;
+        d = d2;
 
-        *policy_2d.get_mut(y).get_mut(x) = policy[from_dir(dir)][y][x];
+        *policy_2d.get_mut(y).get_mut(x) = policy[from_dir(d)][y][x];
     }
+
 
     policy_2d
 }
