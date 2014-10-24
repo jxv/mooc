@@ -27,7 +27,7 @@ static GRID: Grid = [
     [O,X,O,X,O,O]];
 
 static INIT: (uint,uint) = (0,0);
-static GOAL: (uint,uint) = (5,5);
+static GOAL: (uint,uint) = (4,5);
 
 static STEERING_NOISE: f32 = 1.0;
 static DISTANCE_NOISE: f32 = 0.03;
@@ -40,7 +40,7 @@ static D_GAIN: f32 = 6.0;
 
 
 fn forward(grid: &Grid, (x,y): (uint, uint), dir: Dir) -> Option<(uint, uint)> {
-    let (y2, x2) = match dir {
+    let (x2, y2) = match dir {
         Up    => (x, y - 1),
         Left  => (x - 1, y),
         Down  => (x, y + 1),
@@ -49,8 +49,14 @@ fn forward(grid: &Grid, (x,y): (uint, uint), dir: Dir) -> Option<(uint, uint)> {
     if x2 < grid.len() && y2 < grid[0].len() { Some((x2,y2)) } else { None }
 }
 
+#[allow(dead_code)]
 fn from_dir(dir: Dir) -> uint {
     match dir { Up => 0, Left => 1, Down => 2, Right => 3 }
+}
+
+#[allow(dead_code)]
+fn opp_dir(dir: Dir) -> Dir {
+    match dir { Up => Down, Left => Right, Down => Up, Right => Left }
 }
 
 #[deriving(Show,PartialEq,Clone)]
@@ -107,10 +113,10 @@ impl Plan {
         Plan {
             cost: cost,
             grid:[[grid[0][0], grid[0][1], grid[0][2], grid[0][3], grid[0][4], grid[0][5]],
-                  [grid[0][0], grid[0][1], grid[0][2], grid[0][3], grid[0][4], grid[0][5]],
-                  [grid[0][0], grid[0][1], grid[0][2], grid[0][3], grid[0][4], grid[0][5]],
-                  [grid[0][0], grid[0][1], grid[0][2], grid[0][3], grid[0][4], grid[0][5]],
-                  [grid[0][0], grid[0][1], grid[0][2], grid[0][3], grid[0][4], grid[0][5]]],
+                  [grid[1][0], grid[1][1], grid[1][2], grid[1][3], grid[1][4], grid[1][5]],
+                  [grid[2][0], grid[2][1], grid[2][2], grid[2][3], grid[2][4], grid[2][5]],
+                  [grid[3][0], grid[3][1], grid[3][2], grid[3][3], grid[3][4], grid[3][5]],
+                  [grid[4][0], grid[4][1], grid[4][2], grid[4][3], grid[4][4], grid[4][5]]],
             init: init,
             goal: goal,
             heuristic: Plan::make_heuristic(grid, goal, cost),
@@ -120,7 +126,7 @@ impl Plan {
     }
 
 
-    fn make_heuristic(grid: &Grid, goal: (uint,uint), cost: uint) -> Vec<Vec<uint>> {
+    fn make_heuristic(grid: &Grid, goal: (uint,uint), /*cost*/ _: uint) -> Vec<Vec<uint>> {
         Vec::from_fn(grid.len(), |i: uint| {
             Vec::from_fn(grid[i].len(), |j: uint| {
                 (if i < goal.0 { goal.0 - i } else { i - goal.0 }) +
@@ -136,8 +142,10 @@ impl Plan {
             fail!("Heuristic must be defined to run astar");
         }
 
-        let mut closed = Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), false));
-        let mut action: Vec<Vec<Option<Dir>>> = Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), None));
+        let mut closed =
+                Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), false));
+        let mut action: Vec<Vec<Option<Dir>>> =
+                Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), None));
 
         *closed.get_mut(self.init.0 as uint).get_mut(self.init.1 as uint) = true;
 
@@ -153,47 +161,52 @@ impl Plan {
         let mut count: int = 0;
 
         while !found && !resign {
-            if open.len() == 0 {
-                resign = true;
-                println!("##### Search terminated without success");
-            } else {
-                open.sort_by(|a,b| b.cmp(a));
-                let next = open.pop().unwrap();
-                let x = next.3;
-                let y = next.4;
-                let g = next.1;
+            open.sort_by(|a,b| b.cmp(a));
+            let (_,g,_,x,y) = match open.pop() {
+                None => {
+                       resign = true;
+                       println!("##### Search terminated without success, {}", count);
+                       continue;
+                    },
+                Some(n) => n
+            };
 
-                if x == self.goal.0 && y == self.goal.1 {
-                    found = true;
-                } else {
-                    for &d in DIRS.iter() {
-                        match forward(&self.grid, (x,y), d) {
-                            None          => continue,
-                            Some((x2,y2)) => {
-                                    if !closed[x2][y2] && self.grid[x2][y2] == O {
-                                        let g2 = g + self.cost;
-                                        let h2 = self.heuristic[x2][y2];
-                                        let f2 = g2 + h2;
-                                        open.push((f2, g2, h2, x2, y2));
-                                        *closed.get_mut(x2).get_mut(y2) = true;
-                                        *action.get_mut(x2).get_mut(y2) = Some(d);
-                                    }
-                                },
-                        }
-                    }
-                }
+            if x == self.goal.0 && y == self.goal.1 {
+                found = true;
+                continue;
             }
 
+            for &d in DIRS.iter() {
+                let (x2,y2) = match forward(&self.grid, (x,y), d) {
+                    None => continue,
+                    Some(xy) => xy
+                };
+
+                if !closed[x2][y2] && self.grid[x2][y2] == O {
+                    let g2 = g + self.cost;
+                    let h2 = self.heuristic[x2][y2];
+                    let f2 = g2 + h2;
+                    open.push((f2, g2, h2, x2, y2));
+                    *closed.get_mut(x2).get_mut(y2) = true;
+                    *action.get_mut(x2).get_mut(y2) = Some(d);
+                }
+            }
             count += 1;
         }
+        
 
         let mut invpath = Vec::new();
         let mut x = self.goal.0;
         let mut y = self.goal.1;
         invpath.push([x,y]);
         while x != self.init.0 || y != self.init.1 {
-            let x2 = x;
-            let y2 = y;
+            let d = opp_dir(action[x][y].unwrap());
+            let (x2,y2) = match d {
+                Up => (x, y - 1),
+                Down => (x, y + 1),
+                Left => (x - 1, y),
+                Right => (x + 1, y)
+            };
             x = x2;
             y = y2;
             invpath.push([x,y]);
@@ -206,6 +219,7 @@ impl Plan {
     }
 
 
+#[allow(dead_code)]
     fn smooth(&mut self) {
         self.smooth_extra(0.1, 0.1, 0.000001)
     }
@@ -337,7 +351,8 @@ impl Robot {
     }
 
 
-    fn travel_extra(&self, grid: &Grid, steering: f32, distance: f32, tolerance: f32, max_steering_angle: f32) -> Robot {
+    fn travel_extra(&self, _: &Grid, steering: f32, distance: f32, tolerance: f32,
+            max_steering_angle: f32) -> Robot {
         let steering =
             if steering > max_steering_angle {
                 max_steering_angle
@@ -434,14 +449,14 @@ impl Robot {
 
 
 impl Particles {
-    fn new(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32, measurement_noise: f32)
-            -> Particles {
+    fn new(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32,
+            measurement_noise: f32) -> Particles {
         Particles::new_extra(x, y, theta, steering_noise, distance_noise, measurement_noise, 100)
     }
 
     
-    fn new_extra(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32, measurement_noise: f32, n: uint)
-            -> Particles {
+    fn new_extra(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32,
+            measurement_noise: f32, n: uint) -> Particles {
         Particles {
             n: n,
             steering_noise: steering_noise,
@@ -466,7 +481,8 @@ impl Particles {
             x += self.data[i].x;
             y += self.data[i].y;
 
-            orientation += modulo(self.data[i].orientation - self.data[0].orientation + Float::pi(),
+            orientation += modulo(self.data[i].orientation - self.data[0].orientation
+                                                           + Float::pi(),
                                   Float::two_pi())
                           + self.data[0].orientation
                           - Float::pi();
@@ -510,13 +526,14 @@ impl Particles {
 }
 
 
-fn run(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32,f32)) -> (bool, uint, uint) {
+fn run(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32,f32))
+        -> (bool, uint, uint) {
     run_extra(grid, goal, spath, params, false, 0.1, 1000)
 }
 
 
-fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32,f32), print_flag: bool,
-        speed: f32, timeout: uint) -> (bool, uint, uint) {
+fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32,f32),
+        print_flag: bool, speed: f32, timeout: uint) -> (bool, uint, uint) {
     let mut myrobot = Robot::new();
     myrobot.set(0.0, 0.0, 0.0);
     myrobot.set_noise(STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE);
@@ -577,11 +594,12 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
 fn main() {
     let mut plan = Plan::new(&GRID, INIT, GOAL);
     plan.astar();
+    println!("{}", plan.path);
     plan.smooth_extra(WEIGHT_DATA, WEIGHT_SMOOTH, 0.000001);
     println!("{}", run(&GRID, GOAL, &plan.spath, (P_GAIN, D_GAIN)));
 }
 
-
+#[allow(dead_code)]
 fn twiddle() {
 }
 
