@@ -29,7 +29,7 @@ static GRID: Grid = [
 static INIT: (uint,uint) = (0,0);
 static GOAL: (uint,uint) = (4,5);
 
-static STEERING_NOISE: f32 = 1.0;
+static STEERING_NOISE: f32 = 0.1;
 static DISTANCE_NOISE: f32 = 0.03;
 static MEASUREMENT_NOISE: f32 = 0.3;
 
@@ -245,9 +245,7 @@ impl Plan {
                     let aux = self.spath[i][j];
 
                     *self.spath.get_mut(i).get_mut(j)
-                            += weight_data * ( self.spath[i-1][j]
-                                             + self.spath[i+1][j]
-                                             - 2.0 * self.path[i][j] as f32 );
+                            += weight_data * (self.path[i][j] as f32 - self.spath[i][j]);
 
                     *self.spath.get_mut(i).get_mut(j)
                             += weight_smooth * ( self.spath[i-1][j]
@@ -280,7 +278,7 @@ impl Plan {
 impl Robot {
 
     fn new() -> Robot {
-        Robot::new_with_extra(20.0)
+        Robot::new_with_extra(0.5)
     }
 
 
@@ -313,14 +311,12 @@ impl Robot {
     }
 
 
-    //--
-
-
     fn check_collision(&mut self, grid: &Grid) -> bool {
         for i in range(0u, grid.len()) {
             for j in range(0u, grid[i].len()) {
                 if grid[i][j] == X {
-                    let dist = ((self.x - i as f32).powi(2) + (self.y - j  as f32).powi(2)).sqrt();
+                    let dist = (  (self.x - (i as f32)).powi(2) 
+                               +  (self.y - (j as f32)).powi(2)).sqrt();
                     if dist < 0.5 {
                         self.num_collisions += 1;
                         return false;
@@ -338,7 +334,8 @@ impl Robot {
 
     
     fn check_goal_extra(&self, goal: (uint,uint), threshold: f32) -> bool {
-        let dist = ((goal.0 as f32 - self.x).powi(2) + (goal.1 as f32 - self.y).powi(2)).sqrt();
+        let dist = ( ((goal.0 as f32) - self.x).powi(2)
+                   + ((goal.1 as f32) - self.y).powi(2)).sqrt();
         dist < threshold
     }
 
@@ -365,13 +362,8 @@ impl Robot {
         let distance = if distance < 0.0 { 0.0 } else { distance };
 
         // make a new copy
-        let mut res = Robot::new();
-        res.length            = self.length;
-        res.steering_noise    = self.steering_noise;
-        res.distance_noise    = self.distance_noise;
-        res.measurement_noise = self.measurement_noise;
-        res.num_collisions    = self.num_collisions;
-        res.num_steps         = self.num_steps + 1;
+        let mut res = self.clone();
+        res.num_steps = self.num_steps + 1;
 
         // apply noise
         let steering2 = gauss(steering, self.steering_noise);
@@ -404,7 +396,6 @@ impl Robot {
     }
 
    
-#[allow(dead_code)]
     fn measurement_prob(&self, measurement: (f32, f32)) -> f32 {
         let error_x = measurement.0 - self.x;
         let error_y = measurement.1 - self.y;
@@ -423,38 +414,15 @@ impl Robot {
    
 }
 
-/*
-    fn cte(&self, radius: f32) -> f32 {
-        let mut cte = 0.0;
-        let x = self.x;
-        let y = self.y;
-
-        if x <= radius || x >= radius * 3.0 {
-            let mid_x = if x < radius { radius } else { 3.0 * radius };
-            let mid_y = radius;
-            cte = ((mid_x - x).powi(2) + (mid_y - y).powi(2)).sqrt() - radius;
-        }
-
-        if x >= radius && x <= radius * 3.0 && y >= radius {
-            cte = -(radius * 2.0 - y);
-        }
-
-        if x >= radius && x <= radius * 3.0 && y <= radius {
-            cte = -y;
-        }
-
-        cte
-    }
-*/
-
 
 impl Particles {
+
     fn new(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32,
             measurement_noise: f32) -> Particles {
         Particles::new_extra(x, y, theta, steering_noise, distance_noise, measurement_noise, 100)
     }
 
-    
+
     fn new_extra(x: f32, y: f32, theta: f32, steering_noise: f32, distance_noise: f32,
             measurement_noise: f32, n: uint) -> Particles {
         Particles {
@@ -481,15 +449,16 @@ impl Particles {
             x += self.data[i].x;
             y += self.data[i].y;
 
-            orientation += modulo(self.data[i].orientation - self.data[0].orientation
-                                                           + Float::pi(),
-                                  Float::two_pi())
-                          + self.data[0].orientation
-                          - Float::pi();
+            orientation += modulo(self.data[i].orientation
+                                        - self.data[0].orientation
+                                        + Float::pi(),
+                                 Float::two_pi())
+                           + self.data[0].orientation - Float::pi();
 
         }
 
-        (x / self.n as f32, y / self.n as f32, orientation / self.n as f32)
+        let n: f32 = self.n as f32;
+        (x / n, y / n, orientation / n)
     }
 
 
@@ -501,12 +470,12 @@ impl Particles {
 
 
     fn sense(&mut self, z: (f32, f32)) {
-        let ws = Vec::from_fn(self.data.len(), |i: uint| {
+        let ws = Vec::from_fn(self.n, |i: uint| {
                 self.data[i].measurement_prob(z)
             });
 
         let mut p3 = Vec::with_capacity(self.n);
-        let mut idx = random::<uint>() %  self.n;
+        let mut idx = random::<uint>() % self.n;
         let mut beta = 0.0;
         let mut mw = 0.0;
         for &w in ws.iter() { if w > mw { mw = w; } }
@@ -515,11 +484,10 @@ impl Particles {
             beta += random::<f32>() * 2.0 * mw;
             while beta > ws[idx] {
                 beta -= ws[idx];
-                idx = (idx + self.n + 1) % self.n;
+                idx = (idx + 1) % self.n;
             }
             p3.push(self.data[idx].clone());
         }
-
         self.data = p3;
     }
 
@@ -540,8 +508,6 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
     let mut filter = Particles::new(myrobot.x, myrobot.y, myrobot.orientation,
             STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE); 
 
-    //
-
     let mut cte_p = 0.0;
     let mut err = 0.0;
     let mut n = 0;
@@ -551,13 +517,13 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
         let mut cte_d = -cte_p;
         let estimate = filter.get_position();
 
-        let dx: f32 = spath[idx+1][0] as f32 - spath[idx][0] as f32;
-        let dy: f32 = spath[idx+1][1] as f32 - spath[idx][1] as f32;
-        let drx: f32 = estimate.0 as f32 - spath[idx][0] as f32;
-        let dry: f32 = estimate.1 as f32 - spath[idx][1] as f32;
+        let dx: f32 = spath[idx+1][0] - spath[idx][0];
+        let dy: f32 = spath[idx+1][1] - spath[idx][1];
+        let drx: f32 = estimate.0 - spath[idx][0];
+        let dry: f32 = estimate.1 - spath[idx][1];
         
         let u = (drx * dx + dry * dy) / (dx.powi(2) + dy.powi(2));
-        cte_p = (dry * dx + drx * dy) / (dx.powi(2) + dy.powi(2));
+        cte_p = (dry * dx - drx * dy) / (dx.powi(2) + dy.powi(2));
 
         if u > 1.0 {
             idx += 1;
@@ -565,7 +531,7 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
 
         cte_d += cte_p;
 
-        let steer = -params.0 * cte_p - params.1 * cte_d;
+        let steer = -(params.0 * cte_p) - (params.1 * cte_d);
         myrobot = myrobot.travel(grid, steer, speed);
         filter.travel(grid, steer, speed);
 
@@ -585,18 +551,20 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
         }
     }
     
-    //
-
     (myrobot.check_goal(goal), myrobot.num_collisions, myrobot.num_steps)
 }
 
 
 fn main() {
+    println!("{}",main_fn())
+}
+
+
+fn main_fn() -> (bool, uint, uint) {
     let mut plan = Plan::new(&GRID, INIT, GOAL);
     plan.astar();
-    println!("{}", plan.path);
     plan.smooth_extra(WEIGHT_DATA, WEIGHT_SMOOTH, 0.000001);
-    println!("{}", run(&GRID, GOAL, &plan.spath, (P_GAIN, D_GAIN)));
+    run(&GRID, GOAL, &plan.spath, (P_GAIN, D_GAIN))
 }
 
 #[allow(dead_code)]
