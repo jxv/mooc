@@ -1,5 +1,6 @@
 #![feature(tuple_indexing)]
 
+use std::iter::AdditiveIterator;
 use std::rand::{task_rng, random};
 use std::rand::distributions::{Normal, IndependentSample};
 use std::num::{Float, FloatMath};
@@ -556,19 +557,75 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
 
 
 fn main() {
-    println!("{}",main_fn())
+    println!("{}",
+            main_fn(&GRID, INIT, GOAL,
+                    STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE,
+                    WEIGHT_DATA, WEIGHT_SMOOTH, P_GAIN, D_GAIN))
 }
 
 
-fn main_fn() -> (bool, uint, uint) {
-    let mut plan = Plan::new(&GRID, INIT, GOAL);
+fn main_fn(grid: &Grid, init: (uint, uint), goal: (uint, uint),
+        _: f32, _: f32, _: f32,
+        weight_data: f32, weight_smooth: f32, p_gain: f32, d_gain: f32) -> (bool, uint, uint) {
+    let mut plan = Plan::new(grid, init, goal);
     plan.astar();
-    plan.smooth_extra(WEIGHT_DATA, WEIGHT_SMOOTH, 0.000001);
-    run(&GRID, GOAL, &plan.spath, (P_GAIN, D_GAIN))
+    plan.smooth_extra(weight_data, weight_smooth, 0.000001);
+    run(grid, goal, &plan.spath, (p_gain, d_gain))
 }
 
 #[allow(dead_code)]
-fn twiddle() {
+fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
+    let n_params = init_params.len();
+    let mut dparams: Vec<f32> = Vec::from_elem(n_params, 1.0);
+    let mut params = init_params.clone();
+    let k = 10;
+
+    let mut best_error = 0.0;
+    for _ in range(0u, k) {
+        let ret = main_fn(&GRID, INIT, GOAL,
+                STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE,
+                params[0], params[1], params[2], params[3]);
+        best_error += if ret.0 { ret.1 as f32 * 100.0 + ret.2 as f32 } else { 99999.0 };
+    }
+    best_error /= k as f32;
+    println!("{}", best_error);
+
+    let mut n: uint = 0;
+    while dparams.iter().map(|&x| x).sum() >  0.0000001 {
+        for i in range(0u, params.len()) {
+            *params.get_mut(i) += dparams[i];
+            let mut err = 0.0 as f32;
+            for j in range(0u,k) {
+                let ret = main_fn(&GRID, INIT, GOAL,
+                                STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE,
+                                params[0], params[1], params[2], params[3]);
+                err += if ret.0 { ret.1 as f32 * 100.0 + ret.2 as f32 } else { 99999.0 };
+            }
+            println!("{}", err / k as f32);
+            if err < best_error {
+                best_error = err / k as f32;
+                *dparams.get_mut(i) *= 1.1;
+            } else {
+                *params.get_mut(i) -= 2.0 * dparams[i];
+                err = 0.0;
+                for j in range(0u,k) {
+                    // here
+                }
+                println!("{}", err / k as f32);
+                if err < best_error {
+                    best_error = err / k as f32;
+                    *dparams.get_mut(i) *= 1.1;
+                } else {
+                    *params.get_mut(i) += dparams[i];
+                    *dparams.get_mut(i) *= 0.5;
+                }
+            }
+        }
+        n += 1;
+        println!("Twiddle #{} {} -> {}", n, params, best_error);
+    }
+    println!(" ");
+    params
 }
 
 
