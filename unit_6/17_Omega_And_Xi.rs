@@ -110,7 +110,7 @@ impl Matrix {
                 0.0
             } else { 
                 if d < 0.0 {
-                    fail!("matrix not positive-definite");
+                    panic!("matrix not positive-definite");
                 }
                 d.sqrt()
         };

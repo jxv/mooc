@@ -139,7 +139,7 @@ impl Plan {
     fn astar(&mut self) {
 
         if self.heuristic.len() == 0 {
-            fail!("Heuristic must be defined to run astar");
+            panic!("Heuristic must be defined to run astar");
         }
 
         let mut closed =
@@ -227,7 +227,7 @@ impl Plan {
 
     fn smooth_extra(&mut self, weight_data: f32, weight_smooth: f32, tolerance: f32) {
         if self.path.len() == 0 {
-            fail!("run astar before smoothing path");
+            panic!("run astar before smoothing path");
         }
 
         self.spath = Vec::from_fn(self.path.len(), |i: uint| {
