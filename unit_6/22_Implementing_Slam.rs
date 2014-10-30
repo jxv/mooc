@@ -1,5 +1,17 @@
+#![feature(tuple_indexing)]
+#![allow(unused_variable, dead_code, unused_imports)]
 use std::iter::{range_step_inclusive, AdditiveIterator};
 use std::rand::{task_rng, random};
+
+
+static NUM_LANDMARKS: uint = 5;
+static N: uint = 20;
+static WORLD_SIZE: f32 = 100.0;
+static MEASUREMENT_RANGE: f32 = 50.0;
+static MOTION_NOISE: f32 = 2.0;
+static MEASUREMENT_NOISE: f32 = 2.0;
+static DISTANCE: f32 = 20.0;
+
 
 #[deriving(Show,Clone,PartialEq)]
 struct Matrix {
@@ -7,6 +19,7 @@ struct Matrix {
     dimx: uint,
     dimy: uint,
 }
+
 
 #[deriving(Show,Clone)]
 struct Robot {
@@ -279,58 +292,45 @@ fn main() {
 }
 
 fn slam(data: Vec<Step>, n: uint, num_landmarks: uint,
-        motion_noise: f32, measurement_noise: f32) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
-    (vec![], vec![])
-}
+        motion_noise: f32, measurement_noise: f32) -> Matrix { 
+    let dim = (n * num_landmarks) * 2;
 
-/*
-fn doit(initial_pos: f32, move1: f32, move2: f32, z0: f32, z1: f32, z2: f32) -> Matrix {
-    let mut omega = Matrix::new(vec![
-        vec![1.0, 0.0, 0.0],
-        vec![0.0, 0.0, 0.0],
-        vec![0.0, 0.0, 0.0]]);
-    let mut xi = Matrix::new(vec![vec![initial_pos], vec![0.0], vec![0.0]]);
+    let mut omega = Matrix::zero(dim,dim);
+    *omega.value.get_mut(0).get_mut(0) = 1.0;
+    *omega.value.get_mut(1).get_mut(1) = 1.0;
 
-    omega = omega.add(&Matrix::new(vec![
-        vec![ 1.0, -1.0,  0.0],
-        vec![-1.0,  1.0,  0.0],
-        vec![ 0.0,  0.0,  0.0]]));
-    xi = xi.add(&Matrix::new(vec![vec![-move1], vec![move1], vec![0.0]]));
+    let mut xi = Matrix::zero(dim, 1);
+    *xi.value.get_mut(0).get_mut(0) = WORLD_SIZE / 2.0;
+    *xi.value.get_mut(1).get_mut(0) = WORLD_SIZE / 2.0;
+
+    for k in range(0u, data.len()) {
+        let p = k * 2;
+        let measurements = &data[k].measurements;
+        let motion = &data[k].motion;
+        // update info mat/vec on measurement
+        for i in range(0u, measurements.len()) {
+            let m = 2 * (n + measurements[i].0);
+            for b in range(0u, 2u) {
+                *omega.value.get_mut(n+b).get_mut(n+b) +=  1.0 / measurement_noise;
+                *omega.value.get_mut(m+b).get_mut(m+b) +=  1.0 / measurement_noise;
+                *omega.value.get_mut(n+b).get_mut(m+b) += -1.0 / measurement_noise;
+                *omega.value.get_mut(m+b).get_mut(n+b) += -1.0 / measurement_noise;
+                *xi.value.get_mut(n+b).get_mut(0) += -measurements[i].1[b] / measurement_noise;
+                *xi.value.get_mut(m+b).get_mut(0) +=  measurements[i].1[b] / measurement_noise;
+            }
+        }
+        // update info mat/vec on motion
+        for b in range(0u, 4u) {
+            *omega.value.get_mut(n+b).get_mut(n + b) += 1.0 / motion_noise;
+        }
+        for b in range(0u, 2u) {
+            *omega.value.get_mut(n+b  ).get_mut(n+b+2) += -1.0 / motion_noise;
+            *omega.value.get_mut(n+b+2).get_mut(n+b  ) += -1.0 / motion_noise;
+            *xi.value.get_mut(n+b  ).get_mut(0) += -motion[b] / motion_noise;
+            *xi.value.get_mut(n+b+2).get_mut(0) +=  motion[b] / motion_noise;
+        }
+    }
     
-    omega = omega.add(&Matrix::new(vec![
-        vec![ 0.0,  0.0,  0.0],
-        vec![ 0.0,  1.0, -1.0],
-        vec![ 0.0, -1.0,  1.0]]));
-    xi = xi.add(&Matrix::new(vec![vec![0.0], vec![-move2], vec![move2]]));
-
-
-    omega = omega.expand(4, 4, &vec![0, 1, 2], &vec![0, 1, 2]);
-    xi = xi.expand(4, 1, &vec![0, 1, 2], &vec![0]);
-
-    omega = omega.add(&Matrix::new(vec![
-        vec![1.0, 0.0, 0.0, -1.0],
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![-1.0, 0.0, 0.0, 1.0]]));
-    xi = xi.add(&Matrix::new(vec![vec![-z0], vec![0.0], vec![0.0], vec![z0]]));
-
-    omega = omega.add(&Matrix::new(vec![
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![0.0, 1.0, 0.0, -1.0],
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![0.0, -1.0, 0.0, 1.0]]));
-    xi = xi.add(&Matrix::new(vec![vec![0.0], vec![-z1], vec![0.0], vec![z1]]));
-
-    omega = omega.add(&Matrix::new(vec![
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![0.0, 0.0, 0.0, 0.0],
-        vec![0.0, 0.0, 5.0, -5.0],
-        vec![0.0, 0.0, -5.0, 5.0]]));
-    xi = xi.add(&Matrix::new(vec![vec![0.0], vec![0.0], vec![-z2 * 5.0], vec![z2 * 5.0]]));
-
-    omega.print("omega: ".to_string());
-    xi.print("xi: ".to_string());
     let mu = omega.inverse().mul(&xi);
     mu
 }
-*/
