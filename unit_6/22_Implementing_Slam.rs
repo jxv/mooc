@@ -283,7 +283,37 @@ impl Robot {
 
 
 fn make_data(n: uint, num_landmarks: uint, world_size: f32, measurement_range: f32,
-        motion_noise: f32, measurement_noise: f32, distance: f32) {
+        motion_noise: f32, measurement_noise: f32, distance: f32)
+        -> Vec<(Vec<(uint, Vec<f32>)>, f32, f32)> {
+    let mut complete = false;
+    let mut data = Vec::new();
+    while !complete {
+        let mut r = Robot::new_extra(world_size, measurement_range, motion_noise,
+                measurement_noise);
+        r.make_landmarks(num_landmarks);
+        let mut seen = Vec::from_elem(num_landmarks, false);
+
+        let mut orientation = random::<f32>() * Float::two_pi();
+        let mut dx = orientation.cos() * distance;
+        let mut dy = orientation.sin() * distance;
+
+        for k in range(0u, n - 1) {
+            let z = r.sense();
+            for i in range(0u, z.len()) {
+                *seen.get_mut(z[i].0) = true;
+            }
+
+            while !r.travel(dx, dy) {
+                orientation = random::<f32>() * Float::two_pi();
+                dx = orientation.cos() * distance;
+                dy = orientation.sin() * distance;
+            }
+            data.push((z, dx, dy));
+        }
+        complete = true;
+        for &s in seen.iter() { complete = complete && s };
+    }
+    data
 }
 
 
