@@ -283,13 +283,12 @@ impl Robot {
 
 
 fn make_data(n: uint, num_landmarks: uint, world_size: f32, measurement_range: f32,
-        motion_noise: f32, measurement_noise: f32, distance: f32)
-        -> Vec<(Vec<(uint, Vec<f32>)>, f32, f32)> {
+        motion_noise: f32, measurement_noise: f32, distance: f32) -> Vec<Step> {
     let mut complete = false;
     let mut data = Vec::new();
+    let mut r = Robot::new();
     while !complete {
-        let mut r = Robot::new_extra(world_size, measurement_range, motion_noise,
-                measurement_noise);
+        r = Robot::new_extra(world_size, measurement_range, motion_noise, measurement_noise);
         r.make_landmarks(num_landmarks);
         let mut seen = Vec::from_elem(num_landmarks, false);
 
@@ -308,22 +307,44 @@ fn make_data(n: uint, num_landmarks: uint, world_size: f32, measurement_range: f
                 dx = orientation.cos() * distance;
                 dy = orientation.sin() * distance;
             }
-            data.push((z, dx, dy));
+            let step = Step { measurements: z, motion: vec![dx, dy] };
+            data.push(step);
         }
         complete = true;
         for &s in seen.iter() { complete = complete && s };
     }
+    println!("Landmarks: {}", r.landmarks);
+    r.print();
+    println!("");
     data
 }
 
 
-fn main() {
-    //println!("{}", doit(-3.0, 5.0, 3.0, 10.0, 5.0, 1.0).value)
+fn print_result(n: uint, num_landmarks: uint, result: &Matrix) {
+    println!("\nestimated pose(s):");
+    for i in range(0u, n) {
+        println!("    [{:.3f}, {:.3f}]",
+                result.value[2 * i][0], result.value[2 * i + 1][0]);
+    }
+    println!("\nestimated landmarks:");
+    for i in range(0u, num_landmarks) {
+        println!("    [{:.3f}, {:.3f}]",
+                result.value[2 * (n + i)][0], result.value[2 * (n + i) + 1][0]);
+    }
 }
 
-fn slam(data: Vec<Step>, n: uint, num_landmarks: uint,
+
+fn main() {
+    let data = make_data(N, NUM_LANDMARKS, WORLD_SIZE, MEASUREMENT_RANGE, MOTION_NOISE,
+            MEASUREMENT_NOISE, DISTANCE);
+    let result = slam(&data, N, NUM_LANDMARKS, MOTION_NOISE, MEASUREMENT_NOISE);
+    print_result(N, NUM_LANDMARKS, &result);
+}
+
+
+fn slam(data: &Vec<Step>, n: uint, num_landmarks: uint,
         motion_noise: f32, measurement_noise: f32) -> Matrix { 
-    let dim = (n * num_landmarks) * 2;
+    let dim = (n + num_landmarks) * 2;
 
     let mut omega = Matrix::zero(dim,dim);
     *omega.value.get_mut(0).get_mut(0) = 1.0;
@@ -335,32 +356,33 @@ fn slam(data: Vec<Step>, n: uint, num_landmarks: uint,
 
     for k in range(0u, data.len()) {
         let p = k * 2;
+        assert!(p < 50);
         let measurements = &data[k].measurements;
         let motion = &data[k].motion;
         // update info mat/vec on measurement
         for i in range(0u, measurements.len()) {
             let m = 2 * (n + measurements[i].0);
             for b in range(0u, 2u) {
-                *omega.value.get_mut(n+b).get_mut(n+b) +=  1.0 / measurement_noise;
+                *omega.value.get_mut(p+b).get_mut(p+b) +=  1.0 / measurement_noise;
                 *omega.value.get_mut(m+b).get_mut(m+b) +=  1.0 / measurement_noise;
-                *omega.value.get_mut(n+b).get_mut(m+b) += -1.0 / measurement_noise;
-                *omega.value.get_mut(m+b).get_mut(n+b) += -1.0 / measurement_noise;
-                *xi.value.get_mut(n+b).get_mut(0) += -measurements[i].1[b] / measurement_noise;
+                *omega.value.get_mut(p+b).get_mut(m+b) += -1.0 / measurement_noise;
+                *omega.value.get_mut(m+b).get_mut(p+b) += -1.0 / measurement_noise;
+                *xi.value.get_mut(p+b).get_mut(0) += -measurements[i].1[b] / measurement_noise;
                 *xi.value.get_mut(m+b).get_mut(0) +=  measurements[i].1[b] / measurement_noise;
             }
         }
         // update info mat/vec on motion
         for b in range(0u, 4u) {
-            *omega.value.get_mut(n+b).get_mut(n + b) += 1.0 / motion_noise;
+            *omega.value.get_mut(p+b).get_mut(p+b) += 1.0 / motion_noise;
         }
         for b in range(0u, 2u) {
-            *omega.value.get_mut(n+b  ).get_mut(n+b+2) += -1.0 / motion_noise;
-            *omega.value.get_mut(n+b+2).get_mut(n+b  ) += -1.0 / motion_noise;
-            *xi.value.get_mut(n+b  ).get_mut(0) += -motion[b] / motion_noise;
-            *xi.value.get_mut(n+b+2).get_mut(0) +=  motion[b] / motion_noise;
+            *omega.value.get_mut(p+b  ).get_mut(p+b+2) += -1.0 / motion_noise;
+            *omega.value.get_mut(p+b+2).get_mut(p+b  ) += -1.0 / motion_noise;
+            *xi.value.get_mut(p+b  ).get_mut(0) += -motion[b] / motion_noise;
+            *xi.value.get_mut(p+b+2).get_mut(0) +=  motion[b] / motion_noise;
         }
     }
-    
+
     let mu = omega.inverse().mul(&xi);
     mu
 }
