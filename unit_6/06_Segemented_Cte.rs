@@ -138,29 +138,23 @@ impl Plan {
 
 
     fn astar(&mut self) {
-
         if self.heuristic.len() == 0 {
             panic!("Heuristic must be defined to run astar");
         }
-
         let mut closed =
-                Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), false));
+            Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), false));
         let mut action: Vec<Vec<Option<Dir>>> =
-                Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), None));
-
+            Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), None));
         closed[self.init.0 as uint][self.init.1] = true;
-
         let x = self.init.0;
         let y = self.init.1;
         let h = self.heuristic[x as uint][y as uint];
         let g = 0;
         let f = g + h;
         let mut open = vec![(f, g, h, x, y)];
-
         let mut found = false;
         let mut resign = false;
         let mut count: int = 0;
-
         while !found && !resign {
             open.sort_by(|a,b| b.cmp(a));
             let (_,g,_,x,y) = match open.pop() {
@@ -171,18 +165,15 @@ impl Plan {
                     },
                 Some(n) => n
             };
-
             if x == self.goal.0 && y == self.goal.1 {
                 found = true;
                 continue;
             }
-
             for &d in DIRS.iter() {
                 let (x2,y2) = match forward(&self.grid, (x,y), d) {
                     None => continue,
                     Some(xy) => xy
                 };
-
                 if !closed[x2][y2] && self.grid[x2][y2] == O {
                     let g2 = g + self.cost;
                     let h2 = self.heuristic[x2][y2];
@@ -194,8 +185,6 @@ impl Plan {
             }
             count += 1;
         }
-        
-
         let mut invpath = Vec::new();
         let mut x = self.goal.0;
         let mut y = self.goal.1;
@@ -230,49 +219,37 @@ impl Plan {
         if self.path.len() == 0 {
             panic!("run astar before smoothing path");
         }
-
         self.spath = Vec::from_fn(self.path.len(), |i: uint| {
             Vec::from_fn(self.path[i].len(), |j: uint| {
                 self.path[i][j] as f32
             })
         });
-        
         let mut change = tolerance;
         while change >= tolerance {
             change = 0.0;
-
             for i in range(1u, self.path.len() - 1) {
                 for j in range(0u, self.path[0].len()) {
-                    let aux = self.spath[i][j];
-
-                    self.spath[i][j]
-                            += weight_data * (self.path[i][j] as f32 - self.spath[i][j]);
-
-                    self.spath[i][j]
-                            += weight_smooth * ( self.spath[i-1][j]
-                                               + self.spath[i+1][j]
-                                               - 2.0 * self.spath[i][j] );
-
+                    let org  = self.path[i][j] as f32;
+                    let curr = self.spath[i][j];
+                    let prev = self.spath[i-1][j];
+                    let next = self.spath[i+1][j];
+                    let mut accum = 0.0;
+                    accum += weight_data * (org - curr);
+                    accum += weight_smooth * (prev + next - 2.0 * curr);
                     if i >= 2 {
-                        self.spath[i][j]
-                                += 0.5 * weight_smooth * ( 2.0 * self.spath[i-1][j]
-                                                         - self.spath[i-2][j]
-                                                         - self.spath[i][j] );
+                        let prev2 = self.spath[i-2][j];
+                        accum += 0.5 * weight_smooth * (2.0 * prev - prev2 - curr);
                     }
-
                     if i <= self.path.len() - 3 {
-                        self.spath[i][j]
-                                += 0.5 * weight_smooth * ( 2.0 * self.spath[i+1][j]
-                                                         - self.spath[i+2][j]
-                                                         - self.spath[i][j] );
+                        let next2 = self.spath[i+2][j];
+                        accum += 0.5 * weight_smooth * (2.0 * next - next2 - curr);
                     }
-
-                    change += (aux - self.spath[i][j]).abs();
+                    self.spath[i][j] += accum;
+                    change += (curr - self.spath[i][j]).abs();
                 }
             }
         }
     }
-
 }
 
 
@@ -316,8 +293,8 @@ impl Robot {
         for i in range(0u, grid.len()) {
             for j in range(0u, grid[i].len()) {
                 if grid[i][j] == X {
-                    let dist = (  (self.x - (i as f32)).powi(2) 
-                               +  (self.y - (j as f32)).powi(2)).sqrt();
+                    let (i,j) = (i as f32, j as f32);
+                    let dist = ((self.x - i).powi(2) + (self.y - j).powi(2)).sqrt();
                     if dist < 0.5 {
                         self.num_collisions += 1;
                         return false;
@@ -359,20 +336,15 @@ impl Robot {
             } else {
                 steering
             };
-
         let distance = if distance < 0.0 { 0.0 } else { distance };
-
         // make a new copy
         let mut res = self.clone();
         res.num_steps = self.num_steps + 1;
-
         // apply noise
         let steering2 = gauss(steering, self.steering_noise);
         let distance2 = gauss(distance, self.distance_noise);
-
         // execute motion
         let turn = steering2.tan() * distance2 / res.length;
-
         if turn.abs() < tolerance {
             // straight line
             res.x = self.x + (distance2 * self.orientation.cos());
@@ -400,7 +372,6 @@ impl Robot {
     fn measurement_prob(&self, measurement: (f32, f32)) -> f32 {
         let error_x = measurement.0 - self.x;
         let error_y = measurement.1 - self.y;
-
         let mut error: f32 = (-(error_x.powi(2)) / self.measurement_noise.powi(2) / 2.0).exp()
                       / (self.measurement_noise.powi(2) * Float::two_pi()).sqrt();
         error *= (-(error_y.powi(2)) / self.measurement_noise.powi(2) / 2.0).exp()
@@ -445,19 +416,15 @@ impl Particles {
         let mut x = 0.0;
         let mut y = 0.0;
         let mut orientation = 0.0;
-
         for i in range(0u, self.n) {
             x += self.data[i].x;
             y += self.data[i].y;
-
             orientation += modulo(self.data[i].orientation
                                         - self.data[0].orientation
                                         + Float::pi(),
                                  Float::two_pi())
                            + self.data[0].orientation - Float::pi();
-
         }
-
         let n: f32 = self.n as f32;
         (x / n, y / n, orientation / n)
     }
@@ -474,13 +441,11 @@ impl Particles {
         let ws = Vec::from_fn(self.n, |i: uint| {
                 self.data[i].measurement_prob(z)
             });
-
         let mut p3 = Vec::with_capacity(self.n);
         let mut idx = random::<uint>() % self.n;
         let mut beta = 0.0;
         let mut mw = 0.0;
         for &w in ws.iter() { if w > mw { mw = w; } }
-
         for _ in range(0u, self.n) {
             beta += random::<f32>() * 2.0 * mw;
             while beta > ws[idx] {
@@ -508,50 +473,38 @@ fn run_extra(grid: &Grid, goal: (uint,uint), spath: &Vec<Vec<f32>>, params: (f32
     myrobot.set_noise(STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE);
     let mut filter = Particles::new(myrobot.x, myrobot.y, myrobot.orientation,
             STEERING_NOISE, DISTANCE_NOISE, MEASUREMENT_NOISE); 
-
     let mut cte_p = 0.0;
     let mut err = 0.0;
     let mut n = 0;
     let mut idx = 0; // index into the path
-
     while !myrobot.check_goal(goal) && n < timeout {
         let mut cte_d = -cte_p;
         let estimate = filter.get_position();
-
         let dx: f32 = spath[idx+1][0] - spath[idx][0];
         let dy: f32 = spath[idx+1][1] - spath[idx][1];
         let drx: f32 = estimate.0 - spath[idx][0];
         let dry: f32 = estimate.1 - spath[idx][1];
-        
         let u = (drx * dx + dry * dy) / (dx.powi(2) + dy.powi(2));
         cte_p = (dry * dx - drx * dy) / (dx.powi(2) + dy.powi(2));
-
         if u > 1.0 {
             idx += 1;
         }
-
         cte_d += cte_p;
-
         let steer = -(params.0 * cte_p) - (params.1 * cte_d);
         myrobot = myrobot.travel(grid, steer, speed);
         filter.travel(grid, steer, speed);
-
         let z = myrobot.sense();
         filter.sense(z);
-
         if !myrobot.check_collision(grid) {
             println!("##### Collision ####");
         }
-
         err += cte_p.powi(2);
         n += 1;
-
         if print_flag {
             myrobot.print();
             println!("cte_p:{} idx:{} u:{} err:{}", cte_p, idx, u, err);
         }
     }
-    
     (myrobot.check_goal(goal), myrobot.num_collisions, myrobot.num_steps)
 }
 
@@ -570,8 +523,8 @@ fn main_fn(grid: &Grid, init: (uint, uint), goal: (uint, uint),
     let mut plan = Plan::new(grid, init, goal);
     plan.astar();
     plan.smooth_extra(weight_data, weight_smooth, 0.000001);
-    for p in plan.path.iter() {
-        println!("{}", p);
+    for i in range(0,plan.spath.len()) {
+        println!("{} -> {}", plan.path[i], plan.spath[i]);
     }
     run(grid, goal, &plan.spath, (p_gain, d_gain))
 }
@@ -582,7 +535,6 @@ fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
     let mut dparams: Vec<f32> = Vec::from_elem(n_params, 1.0);
     let mut params = init_params.clone();
     let k = 10;
-
     let mut best_error = 0.0;
     for _ in range(0u, k) {
         let ret = main_fn(&GRID, INIT, GOAL,
@@ -592,7 +544,6 @@ fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
     }
     best_error /= k as f32;
     println!("{}", best_error);
-
     let mut n: uint = 0;
     while dparams.iter().map(|&x| x).sum() >  0.0000001 {
         for i in range(0u, params.len()) {
