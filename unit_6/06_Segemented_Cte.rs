@@ -148,7 +148,7 @@ impl Plan {
         let mut action: Vec<Vec<Option<Dir>>> =
                 Vec::from_elem(self.grid.len(), Vec::from_elem(self.grid[0].len(), None));
 
-        *closed.get_mut(self.init.0 as uint).get_mut(self.init.1 as uint) = true;
+        closed[self.init.0 as uint][self.init.1] = true;
 
         let x = self.init.0;
         let y = self.init.1;
@@ -188,8 +188,8 @@ impl Plan {
                     let h2 = self.heuristic[x2][y2];
                     let f2 = g2 + h2;
                     open.push((f2, g2, h2, x2, y2));
-                    *closed.get_mut(x2).get_mut(y2) = true;
-                    *action.get_mut(x2).get_mut(y2) = Some(d);
+                    closed[x2][y2] = true;
+                    action[x2][y2] = Some(d);
                 }
             }
             count += 1;
@@ -245,23 +245,23 @@ impl Plan {
                 for j in range(0u, self.path[0].len()) {
                     let aux = self.spath[i][j];
 
-                    *self.spath.get_mut(i).get_mut(j)
+                    self.spath[i][j]
                             += weight_data * (self.path[i][j] as f32 - self.spath[i][j]);
 
-                    *self.spath.get_mut(i).get_mut(j)
+                    self.spath[i][j]
                             += weight_smooth * ( self.spath[i-1][j]
                                                + self.spath[i+1][j]
                                                - 2.0 * self.spath[i][j] );
 
                     if i >= 2 {
-                        *self.spath.get_mut(i).get_mut(j)
+                        self.spath[i][j]
                                 += 0.5 * weight_smooth * ( 2.0 * self.spath[i-1][j]
                                                          - self.spath[i-2][j]
                                                          - self.spath[i][j] );
                     }
 
                     if i <= self.path.len() - 3 {
-                        *self.spath.get_mut(i).get_mut(j)
+                        self.spath[i][j]
                                 += 0.5 * weight_smooth * ( 2.0 * self.spath[i+1][j]
                                                          - self.spath[i+2][j]
                                                          - self.spath[i][j] );
@@ -570,6 +570,9 @@ fn main_fn(grid: &Grid, init: (uint, uint), goal: (uint, uint),
     let mut plan = Plan::new(grid, init, goal);
     plan.astar();
     plan.smooth_extra(weight_data, weight_smooth, 0.000001);
+    for p in plan.path.iter() {
+        println!("{}", p);
+    }
     run(grid, goal, &plan.spath, (p_gain, d_gain))
 }
 
@@ -593,7 +596,7 @@ fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
     let mut n: uint = 0;
     while dparams.iter().map(|&x| x).sum() >  0.0000001 {
         for i in range(0u, params.len()) {
-            *params.get_mut(i) += dparams[i];
+            params[i] += dparams[i];
             let mut err = 0.0 as f32;
             for j in range(0u,k) {
                 let ret = main_fn(&GRID, INIT, GOAL,
@@ -604,9 +607,9 @@ fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
             println!("{}", err / k as f32);
             if err < best_error {
                 best_error = err / k as f32;
-                *dparams.get_mut(i) *= 1.1;
+                dparams[i] *= 1.1;
             } else {
-                *params.get_mut(i) -= 2.0 * dparams[i];
+                params[i] -= 2.0 * dparams[i];
                 err = 0.0;
                 for j in range(0u,k) {
                     // here
@@ -614,10 +617,10 @@ fn twiddle(init_params: &Vec<f32>) -> Vec<f32> {
                 println!("{}", err / k as f32);
                 if err < best_error {
                     best_error = err / k as f32;
-                    *dparams.get_mut(i) *= 1.1;
+                    dparams[i] *= 1.1;
                 } else {
-                    *params.get_mut(i) += dparams[i];
-                    *dparams.get_mut(i) *= 0.5;
+                    params[i] += dparams[i];
+                    dparams[i] *= 0.5;
                 }
             }
         }
